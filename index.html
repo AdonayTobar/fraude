@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FleetGuard — Análisis de Gastos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --white: #ffffff;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --border: #e8eaed;
+  --border2: #d1d5db;
+  --text: #111827;
+  --text2: #6b7280;
+  --text3: #9ca3af;
+  --accent: #1a56db;
+  --accent-light: #eff6ff;
+  --danger: #dc2626;
+  --danger-light: #fef2f2;
+  --warn: #d97706;
+  --warn-light: #fffbeb;
+  --ok: #16a34a;
+  --ok-light: #f0fdf4;
+  --mono: 'DM Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+/* ── HEADER ── */
+header {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky; top: 0; z-index: 200;
+}
+.logo { font-size: 0.95rem; font-weight: 600; letter-spacing: -0.02em; color: var(--text); display:flex;align-items:center;gap:8px; }
+.logo-dot { width:8px;height:8px;border-radius:50%;background:var(--accent); }
+.header-meta { display:flex;gap:8px;align-items:center; }
+.pill { font-family:var(--mono);font-size:0.7rem;color:var(--text2);background:var(--bg);border:1px solid var(--border);padding:3px 9px;border-radius:20px; }
+
+/* ── NAV ── */
+nav {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  display: flex;
+  gap: 0;
+}
+.nav-btn {
+  padding: 12px 16px;
+  font-family: var(--sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text2);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.nav-btn:hover { color: var(--text); }
+.nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── LAYOUT ── */
+.main { max-width: 1320px; margin: 0 auto; padding: 28px 24px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── CARDS / SURFACES ── */
+.card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.card-pad { padding: 20px 24px; }
+.card-title { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text2); margin-bottom: 14px; }
+
+/* ── KPI GRID ── */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.kpi-label { font-size: 0.68rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); margin-bottom: 6px; }
+.kpi-val { font-family: var(--mono); font-size: 1.45rem; font-weight: 500; color: var(--text); line-height: 1; }
+.kpi-sub { font-size: 0.68rem; color: var(--text3); margin-top: 5px; }
+.kpi.danger .kpi-val { color: var(--danger); }
+.kpi.warn .kpi-val { color: var(--warn); }
+.kpi.ok .kpi-val { color: var(--ok); }
+.kpi.blue .kpi-val { color: var(--accent); }
+
+/* ── GRID LAYOUTS ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.col-span-2 { grid-column: span 2; }
+@media(max-width:900px){ .grid-2,.grid-3{grid-template-columns:1fr;} .col-span-2{grid-column:span 1;} }
+
+/* ── CHART WRAP ── */
+.chart-wrap { position: relative; height: 230px; }
+.chart-wrap-sm { position: relative; height: 180px; }
+.chart-wrap-lg { position: relative; height: 300px; }
+
+/* ── SECTION HEADER ── */
+.section-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.section-hd h2 { font-size: 0.9rem; font-weight: 600; }
+.section-hd p { font-size: 0.75rem; color: var(--text2); }
+
+/* ── PERIOD TOGGLE ── */
+.period-toggle { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px; }
+.period-btn { padding: 4px 12px; font-size: 0.72rem; font-weight: 500; font-family: var(--sans); border: none; background: none; border-radius: 4px; cursor: pointer; color: var(--text2); transition: all .15s; }
+.period-btn.active { background: var(--white); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+/* ── FILTER ROW ── */
+.filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+select, input[type="text"], input[type="number"] {
+  height: 32px;
+  padding: 0 10px;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  color: var(--text);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color .15s;
+}
+select:focus, input:focus { border-color: var(--accent); }
+
+/* ── TABLES ── */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+thead { background: var(--bg); }
+th { padding: 10px 14px; text-align: left; font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2); white-space: nowrap; border-bottom: 1px solid var(--border); }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg); }
+tr.row-red td { background: var(--danger-light) !important; }
+tr.row-yellow td { background: var(--warn-light) !important; }
+
+/* ── TAGS ── */
+.tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.tag-red { background: var(--danger-light); color: var(--danger); }
+.tag-yellow { background: var(--warn-light); color: var(--warn); }
+.tag-green { background: var(--ok-light); color: var(--ok); }
+.tag-blue { background: var(--accent-light); color: var(--accent); }
+.tag-gray { background: var(--bg); color: var(--text2); border: 1px solid var(--border); }
+
+/* ── BUTTONS ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; font-family: var(--sans); font-size: 0.78rem; font-weight: 500; border-radius: 6px; cursor: pointer; transition: all .15s; border: none; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #1e40af; }
+.btn-ghost { background: none; color: var(--text2); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--bg); color: var(--text); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-green { background: var(--ok); color: #fff; }
+.btn-green:hover { background: #15803d; }
+
+/* ── IMPORT PAGE ── */
+.import-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+@media(max-width:900px){ .import-layout{grid-template-columns:1fr;} }
+textarea { width:100%;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:var(--mono);font-size:0.73rem;resize:vertical;min-height:220px;outline:none;transition:border-color .15s; }
+textarea:focus { border-color:var(--accent); }
+.format-hint { background:var(--accent-light);border:1px solid #bfdbfe;border-radius:var(--radius);padding:14px 16px;font-size:0.75rem;color:var(--accent);line-height:1.7; }
+.format-hint strong { display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px; }
+.config-row { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+label.field-label { display:block;font-size:0.72rem;font-weight:500;color:var(--text2);margin-bottom:4px; }
+.field { margin-bottom:12px; }
+
+/* ── PERSON CARDS ── */
+.person-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.pcard { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
+.pcard:hover { box-shadow: var(--shadow-md); }
+.pcard.risk-high { border-left: 3px solid var(--danger); }
+.pcard.risk-med { border-left: 3px solid var(--warn); }
+.pcard.risk-low { border-left: 3px solid var(--ok); }
+.pcard-name { font-weight: 600; font-size: 0.88rem; margin-bottom: 2px; }
+.pcard-sub { font-size: 0.72rem; color: var(--text2); margin-bottom: 10px; }
+.pcard-row { display:flex;justify-content:space-between;align-items:center;font-size:0.72rem;color:var(--text2);margin-bottom:4px; }
+.pcard-row strong { color:var(--text);font-family:var(--mono); }
+.bar-bg { height:4px;background:var(--border);border-radius:2px;margin-bottom:6px; }
+.bar-fill { height:4px;border-radius:2px; }
+
+/* ── ANOMALY ITEMS ── */
+.anomaly-item { display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:8px;background:var(--white); }
+.anomaly-item.lv3 { border-color:#fca5a5;background:var(--danger-light); }
+.anomaly-item.lv2 { border-color:#fcd34d;background:var(--warn-light); }
+.anomaly-icon { font-size:1rem;margin-top:1px; }
+.anomaly-body { flex:1; }
+.anomaly-body strong { display:block;font-size:0.82rem;margin-bottom:2px; }
+.anomaly-body span { font-size:0.72rem;color:var(--text2); }
+.anomaly-amt { font-family:var(--mono);font-weight:500;font-size:0.85rem;white-space:nowrap; }
+
+/* ── TREND SELECTOR ── */
+.trend-controls { display:flex;gap:8px;align-items:center;flex-wrap:wrap; }
+
+/* ── EXPORT BTN ROW ── */
+.export-row { display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px; }
+
+/* ── DIVIDER ── */
+.divider { height:1px;background:var(--border);margin:20px 0; }
+
+/* ── EMPTY STATE ── */
+.empty { text-align:center;padding:48px 20px;color:var(--text3); }
+.empty p { font-size:0.8rem;margin-top:6px; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width:5px;height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border2);border-radius:3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>FleetGuard Analytics</div>
+  <div class="header-meta">
+    <span class="pill" id="hTx">0 transacciones</span>
+    <span class="pill" id="hBanks">—</span>
+    <span class="pill" id="hPersons">—</span>
+  </div>
+</header>
+
+<nav>
+  <button class="nav-btn active" data-page="import" onclick="goPage('import',this)">Importar</button>
+  <button class="nav-btn" data-page="dashboard" onclick="goPage('dashboard',this)">Dashboard</button>
+  <button class="nav-btn" data-page="trends" onclick="goPage('trends',this)">Tendencias</button>
+  <button class="nav-btn" data-page="persons" onclick="goPage('persons',this)">Por Persona</button>
+  <button class="nav-btn" data-page="banks" onclick="goPage('banks',this)">Por Banco</button>
+  <button class="nav-btn" data-page="transactions" onclick="goPage('transactions',this)">Transacciones</button>
+  <button class="nav-btn" data-page="anomalies" onclick="goPage('anomalies',this)">Anomalías</button>
+</nav>
+
+<div class="main">
+
+<!-- ════════════════ IMPORT ════════════════ -->
+<div id="page-import" class="page active">
+  <div style="margin-bottom:20px">
+    <div class="section-hd"><div><h2>Importar Datos</h2><p>Pega transacciones desde Excel, Google Sheets o cualquier fuente tabular</p></div></div>
+  </div>
+  <div class="import-layout">
+    <div>
+      <div class="card card-pad" style="margin-bottom:14px">
+        <div class="card-title">Datos de Transacciones</div>
+        <textarea id="rawData" placeholder="Pega aquí tus datos (tabulaciones o comas)&#10;&#10;Ejemplo:&#10;Tarjeta&#9;Fecha&#9;Nombre&#9;Banco&#9;Descripcion&#9;Monto&#10;4111-xxxx&#9;01/15/2025&#9;Juan Perez&#9;Truist&#9;SHELL GAS&#9;85.00"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="processData()">Analizar Datos</button>
+          <button class="btn btn-ghost" onclick="loadSample()">Cargar Ejemplo</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('rawData').value=''">Limpiar</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card card-pad" style="margin-bottom:14px">
+        <div class="card-title">Configuración de Análisis</div>
+        <div class="field">
+          <label class="field-label">Banco con regla: solo gasolina (no-gasolina = ROJO)</label>
+          <input type="text" id="cfgBank" value="Truist" style="width:100%">
+        </div>
+        <div class="config-row">
+          <div class="field">
+            <label class="field-label">Promedio gasto gasolina/llenado ($)</label>
+            <input type="number" id="cfgAvgFuel" value="80" style="width:100%">
+          </div>
+          <div class="field">
+            <label class="field-label">Máx. llenados por semana</label>
+            <input type="number" id="cfgMaxWeek" value="3" style="width:100%">
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Umbral anomalía: % sobre promedio personal</label>
+          <input type="number" id="cfgAnomalyPct" value="150" style="width:100%">
+        </div>
+      </div>
+      <div class="format-hint">
+        <strong>Formato esperado (6 columnas)</strong>
+        Número de Tarjeta · Fecha · Nombre · Banco · Descripción · Monto<br><br>
+        • Separador: tab (Excel) o coma<br>
+        • Fechas: MM/DD/YYYY o YYYY-MM-DD<br>
+        • Montos: numérico, puede incluir $
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ DASHBOARD ════════════════ -->
+<div id="page-dashboard" class="page">
+  <div class="section-hd">
+    <div><h2>Dashboard General</h2><p>Vista consolidada de todos los gastos corporativos</p></div>
+    <button class="btn btn-green" onclick="exportDashboardExcel()">↓ Exportar Excel</button>
+  </div>
+  <div class="kpi-grid" id="kpiGrid"></div>
+  <div class="grid-2">
+    <div class="card card-pad">
+      <div class="card-title">Gasto Total por Persona</div>
+      <div class="chart-wrap"><canvas id="cByPerson"></canvas></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title">Categorías de Gasto</div>
+      <div class="chart-wrap"><canvas id="cByCategory"></canvas></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card card-pad">
+      <div class="card-title">Gasto por Banco</div>
+      <div class="chart-wrap"><canvas id="cByBank"></canvas></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title">Gasolina vs Otros — por Persona</div>
+      <div class="chart-wrap"><canvas id="cFuelVsOther"></canvas></div>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <div class="card-title" style="margin-bottom:4px">Promedio de Gasto en Gasolina por Persona</div>
+    <div class="chart-wrap-lg"><canvas id="cFuelAvg"></canvas></div>
+  </div>
+</div>
+
+<!-- ════════════════ TRENDS ════════════════ -->
+<div id="page-trends" class="page">
+  <div class="section-hd">
+    <div><h2>Tendencias</h2><p>Analiza gastos en el tiempo por período, persona y banco</p></div>
+    <button class="btn btn-green" onclick="exportTrendsExcel()">↓ Exportar Excel</button>
+  </div>
+
+  <!-- Period controls -->
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="trend-controls">
+      <span style="font-size:0.75rem;font-weight:500;color:var(--text2)">Período:</span>
+      <div class="period-toggle">
+        <button class="period-btn active" data-p="day" onclick="setPeriod('day',this)">Día</button>
+        <button class="period-btn" data-p="week" onclick="setPeriod('week',this)">Semana</button>
+        <button class="period-btn" data-p="month" onclick="setPeriod('month',this)">Mes</button>
+        <button class="period-btn" data-p="year" onclick="setPeriod('year',this)">Año</button>
+      </div>
+      <select id="trendPerson" onchange="renderTrends()"><option value="">Todas las personas</option></select>
+      <select id="trendBank" onchange="renderTrends()"><option value="">Todos los bancos</option></select>
+      <select id="trendCategory" onchange="renderTrends()"><option value="">Todas las categorías</option></select>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card card-pad col-span-2">
+      <div class="card-title">Gasto Total en el Tiempo</div>
+      <div class="chart-wrap-lg"><canvas id="cTrendTotal"></canvas></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card card-pad">
+      <div class="card-title">Gasolina en el Tiempo</div>
+      <div class="chart-wrap"><canvas id="cTrendFuel"></canvas></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title">Otros Gastos en el Tiempo</div>
+      <div class="chart-wrap"><canvas id="cTrendOther"></canvas></div>
+    </div>
+  </div>
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="card-title">Gasto por Persona — Comparativo en el Tiempo</div>
+    <div class="chart-wrap-lg"><canvas id="cTrendPersons"></canvas></div>
+  </div>
+  <div class="card card-pad">
+    <div class="card-title">Gasto por Banco — Comparativo en el Tiempo</div>
+    <div class="chart-wrap-lg"><canvas id="cTrendBanks"></canvas></div>
+  </div>
+</div>
+
+<!-- ════════════════ PERSONS ════════════════ -->
+<div id="page-persons" class="page">
+  <div class="section-hd">
+    <div><h2>Por Persona</h2><p>Detalle de gastos y patrones por tarjetahabiente</p></div>
+    <button class="btn btn-green" onclick="exportPersonsExcel()">↓ Exportar Excel</button>
+  </div>
+  <div class="filter-row">
+    <select id="pSort" onchange="renderPersons()">
+      <option value="total_d">Mayor gasto total</option>
+      <option value="total_a">Menor gasto total</option>
+      <option value="fuel_d">Mayor gasto gasolina</option>
+      <option value="risk_d">Mayor riesgo</option>
+      <option value="alerts_d">Más alertas</option>
+    </select>
+    <select id="pFilterBank" onchange="renderPersons()"><option value="">Todos los bancos</option></select>
+  </div>
+  <div class="person-grid" id="personGrid"></div>
+  <div id="personDetail" style="display:none">
+    <div class="divider"></div>
+    <div class="section-hd" style="margin-bottom:12px">
+      <div><h2 id="personDetailName"></h2><p id="personDetailMeta"></p></div>
+      <button class="btn btn-ghost" onclick="closePersonDetail()">Cerrar</button>
+    </div>
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card card-pad">
+        <div class="card-title">Tendencia de Gasto</div>
+        <div class="chart-wrap"><canvas id="cPersonTrend"></canvas></div>
+      </div>
+      <div class="card card-pad">
+        <div class="card-title">Categorías</div>
+        <div class="chart-wrap"><canvas id="cPersonCat"></canvas></div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="personTxTable">
+        <thead><tr><th>Fecha</th><th>Tarjeta</th><th>Banco</th><th>Descripción</th><th>Monto</th><th>Categoría</th><th>Estado</th></tr></thead>
+        <tbody id="personTxBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ BANKS ════════════════ -->
+<div id="page-banks" class="page">
+  <div class="section-hd">
+    <div><h2>Por Banco</h2><p>Análisis de gastos segregado por institución bancaria</p></div>
+    <button class="btn btn-green" onclick="exportBanksExcel()">↓ Exportar Excel</button>
+  </div>
+  <div class="filter-row">
+    <select id="bankPeriod" onchange="renderBanks()">
+      <option value="month">Por Mes</option>
+      <option value="week">Por Semana</option>
+      <option value="day">Por Día</option>
+      <option value="year">Por Año</option>
+    </select>
+  </div>
+  <div class="kpi-grid" id="bankKpiGrid"></div>
+  <div class="grid-2">
+    <div class="card card-pad col-span-2">
+      <div class="card-title">Gasto por Banco en el Tiempo</div>
+      <div class="chart-wrap-lg"><canvas id="cBankTrend"></canvas></div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top:16px">
+    <div class="card card-pad">
+      <div class="card-title">Distribución por Banco</div>
+      <div class="chart-wrap"><canvas id="cBankPie"></canvas></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title">Gasolina vs Otros por Banco</div>
+      <div class="chart-wrap"><canvas id="cBankFuel"></canvas></div>
+    </div>
+  </div>
+  <div style="margin-top:16px" class="table-wrap">
+    <table id="bankSummaryTable">
+      <thead><tr><th>Banco</th><th>Personas</th><th>Transacciones</th><th>Total ($)</th><th>Gasolina ($)</th><th>Otros ($)</th><th>% Gasolina</th><th>Alertas</th></tr></thead>
+      <tbody id="bankSummaryBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════ TRANSACTIONS ════════════════ -->
+<div id="page-transactions" class="page">
+  <div class="section-hd">
+    <div><h2>Transacciones</h2><p>Listado completo con filtros</p></div>
+    <button class="btn btn-green" onclick="exportTxExcel()">↓ Exportar Excel</button>
+  </div>
+  <div class="filter-row">
+    <input type="text" id="txSearch" placeholder="Buscar..." oninput="renderTx()" style="width:180px">
+    <select id="txBank" onchange="renderTx()"><option value="">Todos los bancos</option></select>
+    <select id="txPerson" onchange="renderTx()"><option value="">Todas las personas</option></select>
+    <select id="txCat" onchange="renderTx()"><option value="">Todas las categorías</option></select>
+    <select id="txStatus" onchange="renderTx()">
+      <option value="">Todos los estados</option>
+      <option value="red">Solo alertas rojas</option>
+      <option value="yellow">Solo advertencias</option>
+      <option value="green">Solo normales</option>
+    </select>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Fecha</th><th>Nombre</th><th>Tarjeta</th><th>Banco</th><th>Descripción</th><th>Monto</th><th>Categoría</th><th>Estado</th></tr></thead>
+      <tbody id="txBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════ ANOMALIES ════════════════ -->
+<div id="page-anomalies" class="page">
+  <div class="section-hd">
+    <div><h2>Anomalías y Alertas</h2><p>Transacciones que requieren revisión</p></div>
+    <button class="btn btn-green" onclick="exportAnomaliesExcel()">↓ Exportar Excel</button>
+  </div>
+  <div class="card-title" style="margin-bottom:8px">Alertas Críticas (Rojo)</div>
+  <div id="criticalList"></div>
+  <div class="card-title" style="margin:16px 0 8px">Advertencias (Amarillo)</div>
+  <div id="warnList"></div>
+  <div class="divider"></div>
+  <div class="card-title" style="margin-bottom:10px">Resumen de Riesgo por Persona</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Persona</th><th>Banco(s)</th><th>Total ($)</th><th>Gasolina ($)</th><th>Otros ($)</th><th>Llenados/Sem.</th><th>Prom. Llenado ($)</th><th>Alertas</th><th>Riesgo</th></tr></thead>
+      <tbody id="riskBody"></tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /.main -->
+
+<script>
+// ══════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════
+let txAll = [], pStats = {}, cfg = {};
+let trendPeriod = 'day';
+let charts = {};
+
+// ══════════════════════════════════════
+//  NAV
+// ══════════════════════════════════════
+function goPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (txAll.length > 0) renderPage(name);
+}
+function renderPage(name) {
+  const map = { dashboard: renderDashboard, trends: renderTrends, persons: renderPersons, banks: renderBanks, transactions: renderTx, anomalies: renderAnomalies };
+  if (map[name]) map[name]();
+}
+
+// ══════════════════════════════════════
+//  CATEGORIZE
+// ══════════════════════════════════════
+const CAT_RULES = [
+  ['Gasolina', ['gas','shell','chevron','exxon','bp ','fuel','76 ','circle k','sunoco','marathon','speedway','wawa','pilot','flying j','kwik trip','gasolina','combustible','petro','petroleum','valero','texaco','mobil','love\'s','casey\'s','quiktrip','raceway','sunmart']],
+  ['Comida',   ['restaurant','mcdonald','burger','pizza','taco','subway','chick-fil','domino','wendy','starbucks','dunkin','food','diner','grill','cafe','coffee','chipotle','panera','arbys','kfc','popeyes','sonic','dairy queen','waffle house']],
+  ['Hospedaje',['hotel','marriott','hilton','hyatt','inn','lodge','motel','airbnb','suites','resort','hampton','comfort inn','best western','holiday inn']],
+  ['Auto/Mant.',['autozone','advance auto','napa auto','o\'reilly','car wash','jiffy lube','tire','oil change','meineke','midas','pep boys','firestone','goodyear','discount tire']],
+  ['Retail',   ['walmart','target','amazon','costco','sam\'s club','home depot','lowe\'s','cvs','walgreens','dollar','rite aid','kroger','publix','grocery','aldi','whole foods']],
+  ['Peaje',    ['toll','e-zpass','sunpass','pikepass','turnpike','tollway']],
+];
+function categorize(desc) {
+  const d = (desc||'').toLowerCase();
+  for (const [cat, kws] of CAT_RULES) if (kws.some(k => d.includes(k))) return cat;
+  return 'Otro';
+}
+
+// ══════════════════════════════════════
+//  PROCESS
+// ══════════════════════════════════════
+function processData() {
+  const raw = document.getElementById('rawData').value.trim();
+  if (!raw) { alert('Pega datos primero.'); return; }
+  cfg = {
+    bank: document.getElementById('cfgBank').value.trim(),
+    avgFuel: +document.getElementById('cfgAvgFuel').value || 80,
+    maxWeek: +document.getElementById('cfgMaxWeek').value || 3,
+    anomPct: +document.getElementById('cfgAnomalyPct').value / 100 || 1.5,
+  };
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const sep = lines[0].includes('\t') ? '\t' : ',';
+  const h0 = lines[0].toLowerCase();
+  const skip = (h0.includes('tarjeta')||h0.includes('fecha')||h0.includes('nombre')||h0.includes('card')) ? 1 : 0;
+
+  txAll = [];
+  for (let i = skip; i < lines.length; i++) {
+    const p = lines[i].split(sep).map(s => s.trim().replace(/^["']|["']$/g,''));
+    if (p.length < 5) continue;
+    const [card, dateRaw, name, bank, desc, amtRaw] = p;
+    const amount = parseFloat((amtRaw||'0').replace(/[$,]/g,'')) || 0;
+    const dateObj = parseDate(dateRaw);
+    const category = categorize(desc);
+    const isFuel = category === 'Gasolina';
+    const isSpecial = bank && bank.toLowerCase().includes(cfg.bank.toLowerCase());
+    const status = (isSpecial && !isFuel) ? 'red' : 'green';
+    txAll.push({ card, date: dateRaw, dateObj, name: name||'Desconocido', bank: bank||'—', desc, amount, category, isFuel, isSpecial, status, anomaly: false, anomalyReason: '' });
+  }
+  buildPersonStats();
+  flagAnomalies();
+  populateFilters();
+  updateHeader();
+  goPage('dashboard', document.querySelector('[data-page="dashboard"]'));
+}
+
+function parseDate(s) {
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) return new Date(+m[3] < 100 ? 2000 + +m[3] : +m[3], +m[1]-1, +m[2]);
+  return new Date(s);
+}
+
+function buildPersonStats() {
+  pStats = {};
+  txAll.forEach(t => {
+    if (!pStats[t.name]) pStats[t.name] = { name:t.name, total:0, fuel:0, other:0, txCount:0, fuelTxCount:0, categories:{}, banks:{}, txs:[], alerts:0, riskLevel:'low' };
+    const ps = pStats[t.name];
+    ps.total += t.amount; ps.txCount++;
+    if (t.isFuel) { ps.fuel += t.amount; ps.fuelTxCount++; } else ps.other += t.amount;
+    ps.categories[t.category] = (ps.categories[t.category]||0) + t.amount;
+    ps.banks[t.bank] = (ps.banks[t.bank]||0) + t.amount;
+    ps.txs.push(t);
+  });
+  Object.values(pStats).forEach(ps => {
+    const dates = ps.txs.filter(t=>t.isFuel&&t.dateObj).map(t=>t.dateObj).sort((a,b)=>a-b);
+    ps.fuelDates = dates;
+    const span = dates.length > 1 ? (dates.at(-1)-dates[0])/(7*864e5) : 1;
+    ps.fillsPerWeek = dates.length > 0 ? (dates.length / Math.max(span,1)).toFixed(2) : '0.00';
+    ps.avgFuelTx = ps.fuelTxCount > 0 ? ps.fuel / ps.fuelTxCount : 0;
+  });
+}
+
+function flagAnomalies() {
+  txAll.forEach(t => {
+    if (t.status === 'red') return;
+    const ps = pStats[t.name];
+    if (!ps) return;
+    const reasons = [];
+    if (t.isFuel && t.amount > cfg.avgFuel * cfg.anomPct)
+      reasons.push(`Llenado alto: $${t.amount.toFixed(2)} vs prom. $${cfg.avgFuel}`);
+    if (t.isFuel && ps.fillsPerWeek > cfg.maxWeek)
+      reasons.push(`Alta frecuencia: ${ps.fillsPerWeek} llenados/sem`);
+    if (!t.isFuel && t.amount > 500)
+      reasons.push(`Gasto elevado en ${t.category}`);
+    if (reasons.length) { t.anomaly = true; t.anomalyReason = reasons.join(' · '); t.status = 'yellow'; }
+  });
+  Object.values(pStats).forEach(ps => {
+    ps.alerts = ps.txs.filter(t => t.status !== 'green').length;
+    ps.riskLevel = ps.alerts === 0 ? 'low' : ps.alerts <= 2 ? 'med' : 'high';
+  });
+}
+
+function populateFilters() {
+  const persons = Object.keys(pStats).sort();
+  const banks = [...new Set(txAll.map(t=>t.bank))].filter(Boolean).sort();
+  const cats = [...new Set(txAll.map(t=>t.category))].sort();
+  setOpts('trendPerson', persons, 'Todas las personas');
+  setOpts('trendBank', banks, 'Todos los bancos');
+  setOpts('trendCategory', cats, 'Todas las categorías');
+  setOpts('txPerson', persons, 'Todas las personas');
+  setOpts('txBank', banks, 'Todos los bancos');
+  setOpts('txCat', cats, 'Todas las categorías');
+  setOpts('pFilterBank', banks, 'Todos los bancos');
+}
+function setOpts(id, arr, all) {
+  const el = document.getElementById(id); if (!el) return;
+  el.innerHTML = `<option value="">${all}</option>` + arr.map(v=>`<option value="${v}">${v}</option>`).join('');
+}
+function updateHeader() {
+  document.getElementById('hTx').textContent = txAll.length + ' transacciones';
+  const banks = [...new Set(txAll.map(t=>t.bank))].filter(Boolean);
+  document.getElementById('hBanks').textContent = banks.join(' · ') || '—';
+  document.getElementById('hPersons').textContent = Object.keys(pStats).length + ' personas';
+}
+
+// ══════════════════════════════════════
+//  CHART HELPERS
+// ══════════════════════════════════════
+const C = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16','#ec4899','#6b7280'];
+function kill(...ids) { ids.forEach(id => { if(charts[id]){charts[id].destroy();delete charts[id];} }); }
+function baseOpts(prefix='$') {
+  return {
+    responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+    plugins:{ legend:{ labels:{ color:'#6b7280', font:{size:11, family:'DM Sans'}, boxWidth:10 } } },
+    scales:{
+      x:{ ticks:{color:'#9ca3af',font:{size:10}}, grid:{color:'#f3f4f6'} },
+      y:{ ticks:{color:'#9ca3af',font:{size:10},callback:v=>'$'+v.toLocaleString()}, grid:{color:'#f3f4f6'} }
+    }
+  };
+}
+
+// ══════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════
+function renderDashboard() {
+  kill('cByPerson','cByCategory','cByBank','cFuelVsOther','cFuelAvg');
+  const total = txAll.reduce((s,t)=>s+t.amount,0);
+  const fuel  = txAll.filter(t=>t.isFuel).reduce((s,t)=>s+t.amount,0);
+  const red   = txAll.filter(t=>t.status==='red').length;
+  const yellow= txAll.filter(t=>t.status==='yellow').length;
+  const np    = Object.keys(pStats).length;
+
+  document.getElementById('kpiGrid').innerHTML = [
+    ['Gasto Total','$'+fmt(total), txAll.length+' tx', ''],
+    ['Gasolina','$'+fmt(fuel), (fuel/total*100||0).toFixed(1)+'% del total','ok'],
+    ['Otros Gastos','$'+fmt(total-fuel), ((total-fuel)/total*100||0).toFixed(1)+'% del total',''],
+    ['Personas',np,'con tarjeta corporativa','blue'],
+    ['Alertas Rojas',red,'no-gasolina en '+cfg.bank,'danger'],
+    ['Advertencias',yellow,'patrones inusuales','warn'],
+  ].map(([l,v,s,cls])=>`<div class="kpi ${cls}"><div class="kpi-label">${l}</div><div class="kpi-val">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
+
+  // By person
+  const srtP = Object.values(pStats).sort((a,b)=>b.total-a.total).slice(0,12);
+  charts.cByPerson = new Chart(document.getElementById('cByPerson'), {
+    type:'bar', data:{labels:srtP.map(p=>firstName(p.name)), datasets:[{label:'Total ($)',data:srtP.map(p=>p.total),backgroundColor:srtP.map(p=>p.riskLevel==='high'?'#fca5a5':p.riskLevel==='med'?'#fde68a':'#93c5fd'),borderRadius:4}]},
+    options:{...baseOpts(),...{plugins:{legend:{display:false}}}}
+  });
+  // By category
+  const cats = {}; txAll.forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount;});
+  const catE = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  charts.cByCategory = new Chart(document.getElementById('cByCategory'), {
+    type:'doughnut', data:{labels:catE.map(e=>e[0]),datasets:[{data:catE.map(e=>e[1]),backgroundColor:C,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#6b7280',font:{size:11},boxWidth:10}}}}
+  });
+  // By bank
+  const banks = {}; txAll.forEach(t=>{if(t.bank)banks[t.bank]=(banks[t.bank]||0)+t.amount;});
+  const bankE = Object.entries(banks).sort((a,b)=>b[1]-a[1]);
+  charts.cByBank = new Chart(document.getElementById('cByBank'), {
+    type:'bar', data:{labels:bankE.map(e=>e[0]),datasets:[{label:'Total ($)',data:bankE.map(e=>e[1]),backgroundColor:C,borderRadius:4}]},
+    options:{...baseOpts(),...{plugins:{legend:{display:false}}}}
+  });
+  // Fuel vs other
+  const srtP2 = Object.values(pStats).sort((a,b)=>b.total-a.total).slice(0,12);
+  charts.cFuelVsOther = new Chart(document.getElementById('cFuelVsOther'), {
+    type:'bar',
+    data:{labels:srtP2.map(p=>firstName(p.name)),datasets:[
+      {label:'Gasolina',data:srtP2.map(p=>p.fuel),backgroundColor:'#34d399',borderRadius:3},
+      {label:'Otros',data:srtP2.map(p=>p.other),backgroundColor:'#fca5a5',borderRadius:3}
+    ]},
+    options:{...baseOpts(),...{scales:{x:{stacked:true,ticks:{color:'#9ca3af',font:{size:10}},grid:{color:'#f3f4f6'}},y:{stacked:true,ticks:{color:'#9ca3af',font:{size:10},callback:v=>'$'+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}}
+  });
+  // Fuel avg
+  const allP = Object.values(pStats).sort((a,b)=>b.avgFuelTx-a.avgFuelTx);
+  charts.cFuelAvg = new Chart(document.getElementById('cFuelAvg'), {
+    type:'bar',
+    data:{labels:allP.map(p=>firstName(p.name)),datasets:[
+      {label:'Prom. por llenado ($)',data:allP.map(p=>+p.avgFuelTx.toFixed(2)),backgroundColor:allP.map(p=>p.avgFuelTx>cfg.avgFuel*cfg.anomPct?'#fca5a5':p.avgFuelTx>cfg.avgFuel*1.2?'#fde68a':'#93c5fd'),borderRadius:4},
+      {type:'line',label:'Promedio config. ($'+cfg.avgFuel+')',data:allP.map(()=>cfg.avgFuel),borderColor:'#ef4444',borderDash:[5,5],borderWidth:1.5,pointRadius:0,fill:false}
+    ]},
+    options:{...baseOpts(),...{plugins:{legend:{labels:{color:'#6b7280',font:{size:11},boxWidth:10}}}}}
+  });
+}
+
+// ══════════════════════════════════════
+//  TRENDS
+// ══════════════════════════════════════
+function setPeriod(p, btn) {
+  trendPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTrends();
+}
+
+function periodKey(dateObj, period) {
+  if (!dateObj || isNaN(dateObj)) return 'N/A';
+  const y = dateObj.getFullYear(), m = dateObj.getMonth(), d = dateObj.getDate();
+  if (period === 'day') return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  if (period === 'week') {
+    const jan1 = new Date(y,0,1);
+    const wk = Math.ceil(((dateObj - jan1)/864e5 + jan1.getDay()+1)/7);
+    return `${y}-S${String(wk).padStart(2,'0')}`;
+  }
+  if (period === 'month') return `${y}-${String(m+1).padStart(2,'0')}`;
+  return `${y}`;
+}
+
+function renderTrends() {
+  kill('cTrendTotal','cTrendFuel','cTrendOther','cTrendPersons','cTrendBanks');
+  const pf = document.getElementById('trendPerson').value;
+  const bf = document.getElementById('trendBank').value;
+  const cf = document.getElementById('trendCategory').value;
+  let data = txAll.filter(t => (!pf||t.name===pf) && (!bf||t.bank===bf) && (!cf||t.category===cf));
+
+  // Group by period
+  const byPeriod = {};
+  const byPeriodFuel = {};
+  const byPeriodOther = {};
+  data.forEach(t => {
+    const k = periodKey(t.dateObj, trendPeriod);
+    byPeriod[k] = (byPeriod[k]||0)+t.amount;
+    if(t.isFuel) byPeriodFuel[k]=(byPeriodFuel[k]||0)+t.amount;
+    else byPeriodOther[k]=(byPeriodOther[k]||0)+t.amount;
+  });
+  const keys = Object.keys(byPeriod).sort();
+  const vals = keys.map(k=>byPeriod[k]);
+  const avgVal = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+
+  // Total trend
+  charts.cTrendTotal = new Chart(document.getElementById('cTrendTotal'), {
+    type:'line',
+    data:{labels:keys,datasets:[
+      {label:'Gasto Total',data:vals,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.07)',fill:true,tension:0.35,pointRadius:3,pointBackgroundColor:'#3b82f6'},
+      {label:'Promedio',data:keys.map(()=>+avgVal.toFixed(2)),borderColor:'#d1d5db',borderDash:[5,5],borderWidth:1.5,pointRadius:0,fill:false}
+    ]},
+    options:baseOpts()
+  });
+
+  // Fuel trend
+  const fuelKeys = Object.keys(byPeriodFuel).sort();
+  charts.cTrendFuel = new Chart(document.getElementById('cTrendFuel'), {
+    type:'line',
+    data:{labels:fuelKeys,datasets:[{label:'Gasolina ($)',data:fuelKeys.map(k=>byPeriodFuel[k]),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.07)',fill:true,tension:0.35,pointRadius:3,pointBackgroundColor:'#10b981'}]},
+    options:baseOpts()
+  });
+
+  // Other trend
+  const otherKeys = Object.keys(byPeriodOther).sort();
+  charts.cTrendOther = new Chart(document.getElementById('cTrendOther'), {
+    type:'line',
+    data:{labels:otherKeys,datasets:[{label:'Otros Gastos ($)',data:otherKeys.map(k=>byPeriodOther[k]),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.07)',fill:true,tension:0.35,pointRadius:3,pointBackgroundColor:'#f59e0b'}]},
+    options:baseOpts()
+  });
+
+  // By person over time
+  const persons = [...new Set(data.map(t=>t.name))].slice(0,8);
+  const personData = {};
+  persons.forEach(n => { personData[n] = {}; });
+  data.forEach(t => { if(personData[t.name]) personData[t.name][periodKey(t.dateObj,trendPeriod)] = (personData[t.name][periodKey(t.dateObj,trendPeriod)]||0)+t.amount; });
+  charts.cTrendPersons = new Chart(document.getElementById('cTrendPersons'), {
+    type:'line',
+    data:{labels:keys,datasets:persons.map((n,i)=>({label:firstName(n),data:keys.map(k=>personData[n][k]||0),borderColor:C[i%C.length],backgroundColor:'transparent',tension:0.3,pointRadius:2,borderWidth:1.8}))},
+    options:baseOpts()
+  });
+
+  // By bank over time
+  const bnks = [...new Set(data.map(t=>t.bank))].filter(Boolean);
+  const bankData = {};
+  bnks.forEach(b => { bankData[b] = {}; });
+  data.forEach(t => { if(bankData[t.bank]) bankData[t.bank][periodKey(t.dateObj,trendPeriod)] = (bankData[t.bank][periodKey(t.dateObj,trendPeriod)]||0)+t.amount; });
+  charts.cTrendBanks = new Chart(document.getElementById('cTrendBanks'), {
+    type:'bar',
+    data:{labels:keys,datasets:bnks.map((b,i)=>({label:b,data:keys.map(k=>bankData[b][k]||0),backgroundColor:C[i%C.length]+'cc',borderRadius:3}))},
+    options:{...baseOpts(),...{scales:{x:{stacked:true,ticks:{color:'#9ca3af',font:{size:10}},grid:{color:'#f3f4f6'}},y:{stacked:true,ticks:{color:'#9ca3af',font:{size:10},callback:v=>'$'+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}}
+  });
+}
+
+// ══════════════════════════════════════
+//  PERSONS
+// ══════════════════════════════════════
+function renderPersons() {
+  kill('cPersonTrend','cPersonCat');
+  document.getElementById('personDetail').style.display = 'none';
+  const sort  = document.getElementById('pSort').value;
+  const bankf = document.getElementById('pFilterBank').value;
+  let list = Object.values(pStats).filter(p => !bankf || Object.keys(p.banks).includes(bankf));
+  const sortMap = { total_d:(a,b)=>b.total-a.total, total_a:(a,b)=>a.total-b.total, fuel_d:(a,b)=>b.fuel-a.fuel, risk_d:(a,b)=>(['high','med','low'].indexOf(a.riskLevel)-['high','med','low'].indexOf(b.riskLevel)), alerts_d:(a,b)=>b.alerts-a.alerts };
+  list.sort(sortMap[sort]||sortMap.total_d);
+  const maxT = Math.max(...list.map(p=>p.total), 1);
+
+  document.getElementById('personGrid').innerHTML = list.map(p => {
+    const pctFuel = (p.fuel/Math.max(p.total,1)*100).toFixed(0);
+    const topCat = Object.entries(p.categories).sort((a,b)=>b[1]-a[1])[0];
+    return `<div class="pcard risk-${p.riskLevel}" onclick="showPersonDetail('${p.name.replace(/'/g,"\\'")}')" >
+      <div class="pcard-name">${p.name}</div>
+      <div class="pcard-sub">${Object.keys(p.banks).join(' · ')} · ${p.txCount} tx</div>
+      <div class="pcard-row"><span>Gasto total</span><strong>$${fmt(p.total)}</strong></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${(p.total/maxT*100).toFixed(1)}%;background:${p.riskLevel==='high'?'#ef4444':p.riskLevel==='med'?'#f59e0b':'#3b82f6'}"></div></div>
+      <div class="pcard-row"><span>⛽ Gasolina (${pctFuel}%)</span><strong>$${fmt(p.fuel)}</strong></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${pctFuel}%;background:#10b981"></div></div>
+      <div class="pcard-row" style="margin-top:6px"><span>${p.fillsPerWeek} llenados/sem · prom. $${p.avgFuelTx.toFixed(2)}</span></div>
+      ${topCat?`<div class="pcard-row"><span>Mayor gasto:</span><strong>${topCat[0]}</strong></div>`:''}
+      <div style="margin-top:8px"><span class="tag tag-${p.riskLevel==='high'?'red':p.riskLevel==='med'?'yellow':'green'}">Riesgo ${p.riskLevel==='high'?'ALTO':p.riskLevel==='med'?'MEDIO':'BAJO'}</span> <span class="tag tag-gray">${p.alerts} alertas</span></div>
+    </div>`;
+  }).join('');
+}
+
+function showPersonDetail(name) {
+  const ps = pStats[name]; if (!ps) return;
+  kill('cPersonTrend','cPersonCat');
+  document.getElementById('personDetailName').textContent = name;
+  document.getElementById('personDetailMeta').textContent = `${ps.txCount} transacciones · $${fmt(ps.total)} total · ${ps.fuelTxCount} llenados`;
+  document.getElementById('personDetail').style.display = 'block';
+
+  // Trend
+  const byD = {}; ps.txs.forEach(t=>{const k=t.date?.slice(0,10)||'N/A';byD[k]=(byD[k]||0)+t.amount;});
+  const dk = Object.keys(byD).sort();
+  charts.cPersonTrend = new Chart(document.getElementById('cPersonTrend'), {
+    type:'line', data:{labels:dk,datasets:[{label:'Gasto ($)',data:dk.map(k=>byD[k]),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.07)',fill:true,tension:0.35,pointRadius:3,pointBackgroundColor:'#3b82f6'}]},
+    options:baseOpts()
+  });
+  // Categories
+  const catE = Object.entries(ps.categories).sort((a,b)=>b[1]-a[1]);
+  charts.cPersonCat = new Chart(document.getElementById('cPersonCat'), {
+    type:'doughnut', data:{labels:catE.map(e=>e[0]),datasets:[{data:catE.map(e=>e[1]),backgroundColor:C,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#6b7280',font:{size:11},boxWidth:10}}}}
+  });
+  // Table
+  document.getElementById('personTxBody').innerHTML = ps.txs.sort((a,b)=>a.date>b.date?1:-1).map(t=>`
+    <tr class="${t.status==='red'?'row-red':t.status==='yellow'?'row-yellow':''}">
+      <td style="font-family:var(--mono);font-size:0.72rem">${t.date}</td>
+      <td style="font-family:var(--mono);font-size:0.7rem">${t.card}</td>
+      <td>${t.bank}</td><td>${t.desc}</td>
+      <td style="font-family:var(--mono)">$${t.amount.toFixed(2)}</td>
+      <td>${catTag(t.category)}</td><td>${statusTag(t)}</td>
+    </tr>`).join('');
+  document.getElementById('personDetail').scrollIntoView({behavior:'smooth'});
+}
+function closePersonDetail() { document.getElementById('personDetail').style.display='none'; }
+
+// ══════════════════════════════════════
+//  BANKS
+// ══════════════════════════════════════
+function renderBanks() {
+  kill('cBankTrend','cBankPie','cBankFuel');
+  const period = document.getElementById('bankPeriod').value;
+  const banks = [...new Set(txAll.map(t=>t.bank))].filter(Boolean);
+
+  // KPIs
+  const bankStats = {};
+  banks.forEach(b => { bankStats[b] = {total:0,fuel:0,other:0,txCount:0,persons:new Set(),alerts:0}; });
+  txAll.forEach(t => {
+    if (!bankStats[t.bank]) return;
+    const bs = bankStats[t.bank];
+    bs.total+=t.amount; bs.txCount++;
+    if(t.isFuel) bs.fuel+=t.amount; else bs.other+=t.amount;
+    bs.persons.add(t.name);
+    if(t.status!=='green') bs.alerts++;
+  });
+  document.getElementById('bankKpiGrid').innerHTML = banks.map((b,i)=>{
+    const bs = bankStats[b];
+    return `<div class="kpi"><div class="kpi-label">${b}</div><div class="kpi-val" style="color:${C[i%C.length]}">$${fmt(bs.total)}</div><div class="kpi-sub">${bs.txCount} tx · ${bs.persons.size} personas · ${bs.alerts} alertas</div></div>`;
+  }).join('');
+
+  // Trend by bank
+  const allKeys = new Set();
+  const bankTime = {};
+  banks.forEach(b => { bankTime[b] = {}; });
+  txAll.forEach(t => {
+    const k = periodKey(t.dateObj, period);
+    allKeys.add(k);
+    if(bankTime[t.bank]) bankTime[t.bank][k]=(bankTime[t.bank][k]||0)+t.amount;
+  });
+  const keys = [...allKeys].sort();
+  charts.cBankTrend = new Chart(document.getElementById('cBankTrend'), {
+    type:'line',
+    data:{labels:keys,datasets:banks.map((b,i)=>({label:b,data:keys.map(k=>bankTime[b][k]||0),borderColor:C[i%C.length],backgroundColor:'transparent',tension:0.3,pointRadius:3,borderWidth:2}))},
+    options:baseOpts()
+  });
+
+  // Pie
+  const bankTotals = banks.map(b=>bankStats[b].total);
+  charts.cBankPie = new Chart(document.getElementById('cBankPie'), {
+    type:'doughnut', data:{labels:banks,datasets:[{data:bankTotals,backgroundColor:C,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#6b7280',font:{size:11},boxWidth:10}}}}
+  });
+
+  // Fuel vs other by bank
+  charts.cBankFuel = new Chart(document.getElementById('cBankFuel'), {
+    type:'bar',
+    data:{labels:banks,datasets:[
+      {label:'Gasolina',data:banks.map(b=>bankStats[b].fuel),backgroundColor:'#34d399',borderRadius:4},
+      {label:'Otros',data:banks.map(b=>bankStats[b].other),backgroundColor:'#fca5a5',borderRadius:4}
+    ]},
+    options:{...baseOpts(),...{scales:{x:{stacked:true,ticks:{color:'#9ca3af'},grid:{color:'#f3f4f6'}},y:{stacked:true,ticks:{color:'#9ca3af',callback:v=>'$'+v.toLocaleString()},grid:{color:'#f3f4f6'}}}}}
+  });
+
+  // Summary table
+  document.getElementById('bankSummaryBody').innerHTML = banks.map(b=>{
+    const bs = bankStats[b];
+    return `<tr><td><strong>${b}</strong></td><td>${bs.persons.size}</td><td>${bs.txCount}</td>
+      <td style="font-family:var(--mono)">$${fmt(bs.total)}</td>
+      <td style="font-family:var(--mono);color:var(--ok)">$${fmt(bs.fuel)}</td>
+      <td style="font-family:var(--mono);color:var(--warn)">$${fmt(bs.other)}</td>
+      <td>${(bs.fuel/Math.max(bs.total,1)*100).toFixed(1)}%</td>
+      <td><span class="tag ${bs.alerts>0?'tag-yellow':'tag-green'}">${bs.alerts}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+//  TRANSACTIONS
+// ══════════════════════════════════════
+function renderTx() {
+  const q  = (document.getElementById('txSearch').value||'').toLowerCase();
+  const b  = document.getElementById('txBank').value;
+  const p  = document.getElementById('txPerson').value;
+  const c  = document.getElementById('txCat').value;
+  const st = document.getElementById('txStatus').value;
+  const list = txAll.filter(t =>
+    (!q || [t.desc,t.name,t.bank].some(s=>(s||'').toLowerCase().includes(q))) &&
+    (!b || t.bank===b) && (!p || t.name===p) && (!c || t.category===c) && (!st || t.status===st)
+  );
+  document.getElementById('txBody').innerHTML = list.map((t,i)=>`
+    <tr class="${t.status==='red'?'row-red':t.status==='yellow'?'row-yellow':''}">
+      <td style="color:var(--text3);font-family:var(--mono);font-size:0.7rem">${i+1}</td>
+      <td style="font-family:var(--mono);font-size:0.7rem;white-space:nowrap">${t.date}</td>
+      <td>${t.name}</td>
+      <td style="font-family:var(--mono);font-size:0.7rem">${t.card}</td>
+      <td>${t.bank}</td><td>${t.desc}</td>
+      <td style="font-family:var(--mono)">$${t.amount.toFixed(2)}</td>
+      <td>${catTag(t.category)}</td><td>${statusTag(t)}</td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════
+//  ANOMALIES
+// ══════════════════════════════════════
+function renderAnomalies() {
+  const red  = txAll.filter(t=>t.status==='red');
+  const yel  = txAll.filter(t=>t.status==='yellow');
+  document.getElementById('criticalList').innerHTML = red.length
+    ? red.map(t=>`<div class="anomaly-item lv3"><div class="anomaly-icon">🔴</div><div class="anomaly-body"><strong>${t.name} — ${t.desc}</strong><span>${t.date} · ${t.bank} · ${t.card} · Gasto no-gasolina en banco ${cfg.bank}</span></div><div class="anomaly-amt" style="color:var(--danger)">$${t.amount.toFixed(2)}</div></div>`).join('')
+    : '<p style="font-size:0.8rem;color:var(--text3)">Sin alertas críticas ✓</p>';
+  document.getElementById('warnList').innerHTML = yel.length
+    ? yel.map(t=>`<div class="anomaly-item lv2"><div class="anomaly-icon">🟡</div><div class="anomaly-body"><strong>${t.name} — ${t.desc}</strong><span>${t.date} · ${t.bank} · ${t.anomalyReason}</span></div><div class="anomaly-amt" style="color:var(--warn)">$${t.amount.toFixed(2)}</div></div>`).join('')
+    : '<p style="font-size:0.8rem;color:var(--text3)">Sin advertencias ✓</p>';
+  document.getElementById('riskBody').innerHTML = Object.values(pStats).sort((a,b)=>b.total-a.total).map(ps=>`
+    <tr><td><strong>${ps.name}</strong></td>
+      <td>${Object.keys(ps.banks).join(', ')}</td>
+      <td style="font-family:var(--mono)">$${fmt(ps.total)}</td>
+      <td style="font-family:var(--mono);color:var(--ok)">$${fmt(ps.fuel)}</td>
+      <td style="font-family:var(--mono);color:var(--warn)">$${fmt(ps.other)}</td>
+      <td style="font-family:var(--mono)">${ps.fillsPerWeek}</td>
+      <td style="font-family:var(--mono)">$${ps.avgFuelTx.toFixed(2)}</td>
+      <td><span class="tag ${ps.alerts>0?ps.riskLevel==='high'?'tag-red':'tag-yellow':'tag-green'}">${ps.alerts}</span></td>
+      <td><span class="tag ${ps.riskLevel==='high'?'tag-red':ps.riskLevel==='med'?'tag-yellow':'tag-green'}">${ps.riskLevel==='high'?'ALTO':ps.riskLevel==='med'?'MEDIO':'BAJO'}</span></td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════
+//  TAG HELPERS
+// ══════════════════════════════════════
+function statusTag(t) {
+  if (t.status==='red')    return `<span class="tag tag-red">Alerta</span>`;
+  if (t.status==='yellow') return `<span class="tag tag-yellow" title="${t.anomalyReason||''}">Revisar</span>`;
+  return `<span class="tag tag-green">Normal</span>`;
+}
+const catColors = {Gasolina:'tag-green',Comida:'tag-blue',Hospedaje:'tag-gray','Auto/Mant.':'tag-blue',Retail:'tag-gray',Peaje:'tag-green'};
+function catTag(cat) { return `<span class="tag ${catColors[cat]||'tag-gray'}">${cat}</span>`; }
+function firstName(n) { return n.split(' ')[0]; }
+function fmt(n) { return n.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// ══════════════════════════════════════
+//  EXCEL EXPORTS
+// ══════════════════════════════════════
+function buildWb(sheets) {
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(({name, data}) => {
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  return wb;
+}
+function saveWb(wb, name) { XLSX.writeFile(wb, name); }
+
+function exportDashboardExcel() {
+  const total = txAll.reduce((s,t)=>s+t.amount,0);
+  const fuel  = txAll.filter(t=>t.isFuel).reduce((s,t)=>s+t.amount,0);
+  const cats = {}; txAll.forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount;});
+  const banks = {}; txAll.forEach(t=>{if(t.bank)banks[t.bank]=(banks[t.bank]||0)+t.amount;});
+
+  const kpiSheet = [
+    ['FleetGuard — Dashboard General'],[''],
+    ['Métrica','Valor'],
+    ['Gasto Total', total],
+    ['Gasolina', fuel],
+    ['Otros Gastos', total - fuel],
+    ['% Gasolina', +(fuel/total*100).toFixed(2)],
+    ['Total Personas', Object.keys(pStats).length],
+    ['Total Transacciones', txAll.length],
+    ['Alertas Rojas', txAll.filter(t=>t.status==='red').length],
+    ['Advertencias', txAll.filter(t=>t.status==='yellow').length],
+  ];
+  const catSheet = [['Categoría','Monto ($)','% del Total'],...Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v])=>[c,+v.toFixed(2),+((v/total)*100).toFixed(2)])];
+  const bankSheet = [['Banco','Monto ($)','% del Total'],...Object.entries(banks).sort((a,b)=>b[1]-a[1]).map(([b,v])=>[b,+v.toFixed(2),+((v/total)*100).toFixed(2)])];
+  const personSheet = [['Persona','Total ($)','Gasolina ($)','Otros ($)','Llenados/Sem','Prom. Llenado ($)','Alertas','Riesgo'],
+    ...Object.values(pStats).sort((a,b)=>b.total-a.total).map(p=>[p.name,+p.total.toFixed(2),+p.fuel.toFixed(2),+p.other.toFixed(2),+p.fillsPerWeek,+p.avgFuelTx.toFixed(2),p.alerts,p.riskLevel==='high'?'ALTO':p.riskLevel==='med'?'MEDIO':'BAJO'])
+  ];
+  saveWb(buildWb([{name:'KPIs',data:kpiSheet},{name:'Categorias',data:catSheet},{name:'Bancos',data:bankSheet},{name:'Personas',data:personSheet}]),'FleetGuard_Dashboard.xlsx');
+}
+
+function exportTrendsExcel() {
+  const period = trendPeriod;
+  const byPeriod={},byFuel={},byOther={};
+  txAll.forEach(t=>{
+    const k=periodKey(t.dateObj,period);
+    byPeriod[k]=(byPeriod[k]||0)+t.amount;
+    if(t.isFuel) byFuel[k]=(byFuel[k]||0)+t.amount;
+    else byOther[k]=(byOther[k]||0)+t.amount;
+  });
+  const keys=Object.keys(byPeriod).sort();
+  const totalSheet=[['Período','Total ($)','Gasolina ($)','Otros ($)'],...keys.map(k=>[k,+(byPeriod[k]||0).toFixed(2),+(byFuel[k]||0).toFixed(2),+(byOther[k]||0).toFixed(2)])];
+  
+  // Person by period
+  const persons=Object.keys(pStats);
+  const pByTime={};
+  persons.forEach(p=>{pByTime[p]={};});
+  txAll.forEach(t=>{if(pByTime[t.name])pByTime[t.name][periodKey(t.dateObj,period)]=(pByTime[t.name][periodKey(t.dateObj,period)]||0)+t.amount;});
+  const personTimeSheet=[['Período',...persons],...keys.map(k=>[k,...persons.map(p=>+(pByTime[p][k]||0).toFixed(2))])];
+
+  // Bank by period
+  const bnks=[...new Set(txAll.map(t=>t.bank))].filter(Boolean);
+  const bByTime={};
+  bnks.forEach(b=>{bByTime[b]={};});
+  txAll.forEach(t=>{if(bByTime[t.bank])bByTime[t.bank][periodKey(t.dateObj,period)]=(bByTime[t.bank][periodKey(t.dateObj,period)]||0)+t.amount;});
+  const bankTimeSheet=[['Período',...bnks],...keys.map(k=>[k,...bnks.map(b=>+(bByTime[b][k]||0).toFixed(2))])];
+
+  saveWb(buildWb([{name:'Tendencia_Total',data:totalSheet},{name:'Por_Persona',data:personTimeSheet},{name:'Por_Banco',data:bankTimeSheet}]),'FleetGuard_Tendencias.xlsx');
+}
+
+function exportPersonsExcel() {
+  const summarySheet=[['Persona','Banco(s)','Total ($)','Gasolina ($)','Otros ($)','Tx Total','Llenados','Prom.Llenado ($)','Llenados/Sem','Alertas','Riesgo'],
+    ...Object.values(pStats).sort((a,b)=>b.total-a.total).map(p=>[p.name,Object.keys(p.banks).join(', '),+p.total.toFixed(2),+p.fuel.toFixed(2),+p.other.toFixed(2),p.txCount,p.fuelTxCount,+p.avgFuelTx.toFixed(2),+p.fillsPerWeek,p.alerts,p.riskLevel==='high'?'ALTO':p.riskLevel==='med'?'MEDIO':'BAJO'])
+  ];
+  const detailSheet=[['Persona','Fecha','Tarjeta','Banco','Descripción','Monto ($)','Categoría','Estado'],
+    ...txAll.sort((a,b)=>a.name>b.name?1:-1).map(t=>[t.name,t.date,t.card,t.bank,t.desc,+t.amount.toFixed(2),t.category,t.status==='red'?'ALERTA':t.status==='yellow'?'REVISAR':'Normal'])
+  ];
+  saveWb(buildWb([{name:'Resumen_Personas',data:summarySheet},{name:'Detalle_Transacciones',data:detailSheet}]),'FleetGuard_Personas.xlsx');
+}
+
+function exportBanksExcel() {
+  const banks=[...new Set(txAll.map(t=>t.bank))].filter(Boolean);
+  const bankStats={};
+  banks.forEach(b=>{bankStats[b]={total:0,fuel:0,other:0,txCount:0,persons:new Set(),alerts:0};});
+  txAll.forEach(t=>{if(!bankStats[t.bank])return;const bs=bankStats[t.bank];bs.total+=t.amount;bs.txCount++;if(t.isFuel)bs.fuel+=t.amount;else bs.other+=t.amount;bs.persons.add(t.name);if(t.status!=='green')bs.alerts++;});
+  const summarySheet=[['Banco','Personas','Transacciones','Total ($)','Gasolina ($)','Otros ($)','% Gasolina','Alertas'],
+    ...banks.map(b=>{const bs=bankStats[b];return[b,bs.persons.size,bs.txCount,+bs.total.toFixed(2),+bs.fuel.toFixed(2),+bs.other.toFixed(2),+((bs.fuel/Math.max(bs.total,1))*100).toFixed(1),bs.alerts];})
+  ];
+  const period = document.getElementById('bankPeriod').value;
+  const allKeys=new Set(); const bankTime={};
+  banks.forEach(b=>{bankTime[b]={};});
+  txAll.forEach(t=>{const k=periodKey(t.dateObj,period);allKeys.add(k);if(bankTime[t.bank])bankTime[t.bank][k]=(bankTime[t.bank][k]||0)+t.amount;});
+  const keys=[...allKeys].sort();
+  const trendSheet=[['Período',...banks],...keys.map(k=>[k,...banks.map(b=>+(bankTime[b][k]||0).toFixed(2))])];
+  saveWb(buildWb([{name:'Resumen_Bancos',data:summarySheet},{name:'Tendencia_Bancos',data:trendSheet}]),'FleetGuard_Bancos.xlsx');
+}
+
+function exportTxExcel() {
+  const q=(document.getElementById('txSearch').value||'').toLowerCase();
+  const b=document.getElementById('txBank').value;
+  const p=document.getElementById('txPerson').value;
+  const c=document.getElementById('txCat').value;
+  const st=document.getElementById('txStatus').value;
+  const list=txAll.filter(t=>(!q||[t.desc,t.name,t.bank].some(s=>(s||'').toLowerCase().includes(q)))&&(!b||t.bank===b)&&(!p||t.name===p)&&(!c||t.category===c)&&(!st||t.status===st));
+  const sheet=[['#','Fecha','Nombre','Tarjeta','Banco','Descripción','Monto ($)','Categoría','Estado','Razón Anomalía'],
+    ...list.map((t,i)=>[i+1,t.date,t.name,t.card,t.bank,t.desc,+t.amount.toFixed(2),t.category,t.status==='red'?'ALERTA':t.status==='yellow'?'REVISAR':'Normal',t.anomalyReason||''])
+  ];
+  saveWb(buildWb([{name:'Transacciones',data:sheet}]),'FleetGuard_Transacciones.xlsx');
+}
+
+function exportAnomaliesExcel() {
+  const redSheet=[['Fecha','Nombre','Tarjeta','Banco','Descripción','Monto ($)','Motivo'],
+    ...txAll.filter(t=>t.status==='red').map(t=>[t.date,t.name,t.card,t.bank,t.desc,+t.amount.toFixed(2),`No-gasolina en banco ${cfg.bank}`])
+  ];
+  const yelSheet=[['Fecha','Nombre','Tarjeta','Banco','Descripción','Monto ($)','Motivo'],
+    ...txAll.filter(t=>t.status==='yellow').map(t=>[t.date,t.name,t.card,t.bank,t.desc,+t.amount.toFixed(2),t.anomalyReason])
+  ];
+  const riskSheet=[['Persona','Banco(s)','Total ($)','Gasolina ($)','Otros ($)','Llenados/Sem','Prom.Llenado ($)','Alertas','Riesgo'],
+    ...Object.values(pStats).sort((a,b)=>b.alerts-a.alerts).map(p=>[p.name,Object.keys(p.banks).join(', '),+p.total.toFixed(2),+p.fuel.toFixed(2),+p.other.toFixed(2),+p.fillsPerWeek,+p.avgFuelTx.toFixed(2),p.alerts,p.riskLevel==='high'?'ALTO':p.riskLevel==='med'?'MEDIO':'BAJO'])
+  ];
+  saveWb(buildWb([{name:'Alertas_Rojas',data:redSheet},{name:'Advertencias',data:yelSheet},{name:'Riesgo_Personas',data:riskSheet}]),'FleetGuard_Anomalias.xlsx');
+}
+
+// ══════════════════════════════════════
+//  SAMPLE DATA
+// ══════════════════════════════════════
+function loadSample() {
+  document.getElementById('rawData').value = `Tarjeta\tFecha\tNombre\tBanco\tDescripcion\tMonto
+4111-xxxx\t01/03/2025\tCarlos Mendez\tTruist\tSHELL GAS STATION #441\t87.50
+4111-xxxx\t01/07/2025\tCarlos Mendez\tTruist\tMCDONALD'S #2210\t18.90
+4111-xxxx\t01/09/2025\tCarlos Mendez\tTruist\tBP GAS STATION\t92.00
+4111-xxxx\t01/10/2025\tCarlos Mendez\tTruist\tWALMART SUPERCENTER\t145.30
+4111-xxxx\t01/12/2025\tCarlos Mendez\tTruist\tCHEVRON #882\t95.10
+4111-xxxx\t01/14/2025\tCarlos Mendez\tTruist\tEXXON MOBIL #003\t89.75
+4111-xxxx\t02/05/2025\tCarlos Mendez\tTruist\tSHELL GAS STATION\t88.00
+4111-xxxx\t02/10/2025\tCarlos Mendez\tTruist\tSTARBUCKS #449\t9.50
+4111-xxxx\t02/15/2025\tCarlos Mendez\tTruist\tCHEVRON GAS\t91.00
+4111-xxxx\t03/02/2025\tCarlos Mendez\tTruist\tEXXON MOBIL\t86.50
+4111-xxxx\t03/08/2025\tCarlos Mendez\tTruist\tBP GAS\t90.25
+4222-xxxx\t01/06/2025\tLuisa Torres\tWells Fargo\tSHELL GAS STATION\t78.00
+4222-xxxx\t01/10/2025\tLuisa Torres\tWells Fargo\tSUBWAY #1122\t12.50
+4222-xxxx\t01/13/2025\tLuisa Torres\tWells Fargo\tEXXON MOBIL\t82.00
+4222-xxxx\t01/17/2025\tLuisa Torres\tWells Fargo\tCHEVRON GAS\t215.00
+4222-xxxx\t01/22/2025\tLuisa Torres\tWells Fargo\tSHELL GAS\t79.00
+4222-xxxx\t02/04/2025\tLuisa Torres\tWells Fargo\tEXXON MOBIL\t83.00
+4222-xxxx\t02/11/2025\tLuisa Torres\tWells Fargo\tBP GAS STATION\t80.00
+4222-xxxx\t02/18/2025\tLuisa Torres\tWells Fargo\tSHELL GAS\t77.50
+4222-xxxx\t03/03/2025\tLuisa Torres\tWells Fargo\tCHEVRON #110\t81.00
+4333-xxxx\t01/05/2025\tRoberto Diaz\tBank of America\tPILOT TRAVEL CENTER\t88.00
+4333-xxxx\t01/06/2025\tRoberto Diaz\tBank of America\tFLYING J TRUCK STOP\t91.00
+4333-xxxx\t01/07/2025\tRoberto Diaz\tBank of America\tSHELL GAS STATION\t85.50
+4333-xxxx\t01/08/2025\tRoberto Diaz\tBank of America\tEXXON MOBIL\t90.00
+4333-xxxx\t01/09/2025\tRoberto Diaz\tBank of America\tBP GAS\t87.00
+4333-xxxx\t01/10/2025\tRoberto Diaz\tBank of America\tHOME DEPOT #4421\t320.00
+4333-xxxx\t02/03/2025\tRoberto Diaz\tBank of America\tSHELL GAS STATION\t89.00
+4333-xxxx\t02/10/2025\tRoberto Diaz\tBank of America\tEXXON MOBIL\t92.00
+4333-xxxx\t02/17/2025\tRoberto Diaz\tBank of America\tBP GAS\t86.00
+4333-xxxx\t03/05/2025\tRoberto Diaz\tBank of America\tSHELL GAS\t88.50
+4444-xxxx\t01/08/2025\tAna Gutierrez\tTruist\tVALERO GAS STATION\t75.00
+4444-xxxx\t01/11/2025\tAna Gutierrez\tTruist\tHILTON GARDEN INN\t289.00
+4444-xxxx\t01/15/2025\tAna Gutierrez\tTruist\tCHEVRON #110\t80.00
+4444-xxxx\t01/18/2025\tAna Gutierrez\tTruist\tAMAZON.COM\t67.40
+4444-xxxx\t02/05/2025\tAna Gutierrez\tTruist\tSHELL GAS\t78.50
+4444-xxxx\t02/12/2025\tAna Gutierrez\tTruist\tEXXON MOBIL\t76.00
+4444-xxxx\t02/20/2025\tAna Gutierrez\tTruist\tCHIPOTLE MEXICAN GRILL\t22.40
+4444-xxxx\t03/01/2025\tAna Gutierrez\tTruist\tBP GAS STATION\t82.00
+4555-xxxx\t01/09/2025\tMiguel Santos\tWells Fargo\tSHELL GAS STATION\t83.00
+4555-xxxx\t01/14/2025\tMiguel Santos\tWells Fargo\tEXXON MOBIL\t79.50
+4555-xxxx\t01/19/2025\tMiguel Santos\tWells Fargo\tSUNOCO #887\t86.00
+4555-xxxx\t01/22/2025\tMiguel Santos\tWells Fargo\tSPEEDWAY GAS\t88.00
+4555-xxxx\t01/25/2025\tMiguel Santos\tWells Fargo\tSHELL GAS\t84.00
+4555-xxxx\t01/27/2025\tMiguel Santos\tWells Fargo\tBP GAS\t87.00
+4555-xxxx\t01/29/2025\tMiguel Santos\tWells Fargo\tEXXON MOBIL\t90.00
+4555-xxxx\t02/03/2025\tMiguel Santos\tWells Fargo\tSHELL GAS STATION\t83.50
+4555-xxxx\t02/10/2025\tMiguel Santos\tWells Fargo\tCHEVRON GAS\t85.00
+4555-xxxx\t03/05/2025\tMiguel Santos\tWells Fargo\tBP GAS\t88.00`;
+}
+</script>
+</body>
+</html>
