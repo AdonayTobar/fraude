@@ -365,7 +365,7 @@ function goPage(n,btn){
 
 // CATEGORIZE
 const CATS=[
-  ['Gasolina',  ['gas','shell','chevron','exxon','bp ','fuel','76 ','circle k','sunoco','marathon','speedway','wawa','pilot','flying j','kwik trip','gasolina','combustible','petro','valero','texaco','mobil',"love's","casey's",'quiktrip','raceway']],
+  ['Gas',  ['gas','shell','chevron','exxon','bp ','fuel','76 ','circle k','sunoco','marathon','speedway','wawa','pilot','flying j','kwik trip','gasolina','combustible','petro','valero','texaco','mobil',"love's","casey's",'quiktrip','raceway']],
   ['Comida',    ['restaurant','mcdonald','burger','pizza','taco','subway','chick-fil','domino','wendy','starbucks','dunkin','food','diner','grill','cafe','coffee','chipotle','panera','arbys','kfc','popeyes','sonic']],
   ['Hospedaje', ['hotel','marriott','hilton','hyatt','inn','lodge','motel','airbnb','suites','resort','hampton','comfort inn','holiday inn']],
   ['Auto/Mant.',["autozone","advance auto","napa auto","o'reilly",'car wash','jiffy lube','tire','oil change','meineke','midas','pep boys','firestone','goodyear']],
@@ -399,7 +399,7 @@ function processData(){
     const amount=parseFloat((amtRaw||'0').replace(/[$,]/g,''))||0;
     const dateObj=parseDate(dateRaw);
     const category=catRaw.trim()||categorize(desc);
-    const isFuel=category==='Gasolina';
+    const isFuel=category==='Gas';
     const isSpec=bank&&bank.toLowerCase().includes(CFG.bank.toLowerCase());
     const status=(isSpec&&!isFuel)?'red':'green';
     TX.push({card,date:dateRaw,dateObj,name:name||'Desconocido',bank:bank||'—',desc,category,isFuel,isSpec,amount,status,anomaly:false,aReason:''});
